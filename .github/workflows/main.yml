@@ -1,0 +1,48 @@
+name: Daily Monitor Pipeline & DB Sync
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape-and-notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests beautifulsoup4 pandas python-dotenv
+
+      - name: Run Scraper Pipeline & WhatsApp Alerts
+        env:
+          WHATSAPP_API_URL: ${{ secrets.WHATSAPP_API_URL }}
+          WHATSAPP_API_KEY: ${{ secrets.WHATSAPP_API_KEY }}
+          WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_CX: ${{ secrets.GOOGLE_CX }}
+        run: |
+          python pipeline.py
+
+      - name: Commit & Push Updated Database
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git add concursos.db
+          if git diff --staged --quiet; then
+            echo "✅ Nenhum novo dado para comitar. DB sincronizado."
+          else
+            git commit -m "chore(db): sync concursos.db $(date +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
